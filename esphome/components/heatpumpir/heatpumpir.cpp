@@ -202,6 +202,17 @@ void HeatpumpIRClimate::transmit_state() {
       break;
   }
 
+  switch (this->preset.value_or(climate::CLIMATE_PRESET_NONE)) {
+    case climate::CLIMATE_PRESET_ECO:
+      fan_speed_cmd = FAN_5;
+      break;
+    case climate::CLIMATE_PRESET_BOOST:
+      fan_speed_cmd = FAN_4;
+      break;
+    default:
+      break;
+  }
+
   switch (this->mode) {
     case climate::CLIMATE_MODE_COOL:
       power_mode_cmd = POWER_ON;
