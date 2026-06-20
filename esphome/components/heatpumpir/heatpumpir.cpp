@@ -125,6 +125,15 @@ void HeatpumpIRClimate::setup() {
   }
 }
 
+climate::ClimateTraits HeatpumpIRClimate::traits() {
+  auto traits = climate_ir::ClimateIR::traits();
+  if (this->protocol_ == PROTOCOL_MITSUBISHI_HEAVY_ZJ || this->protocol_ == PROTOCOL_MITSUBISHI_HEAVY_ZMP) {
+    traits.set_supported_presets(
+        {climate::CLIMATE_PRESET_NONE, climate::CLIMATE_PRESET_ECO, climate::CLIMATE_PRESET_BOOST});
+  }
+  return traits;
+}
+
 void HeatpumpIRClimate::transmit_state() {
   uint8_t power_mode_cmd;
   uint8_t operating_mode_cmd;
@@ -203,6 +212,23 @@ void HeatpumpIRClimate::transmit_state() {
       break;
   }
 
+  if (this->protocol_ == PROTOCOL_MITSUBISHI_HEAVY_ZJ || this->protocol_ == PROTOCOL_MITSUBISHI_HEAVY_ZMP) {
+    switch (this->preset.value_or(climate::CLIMATE_PRESET_NONE)) {
+      case climate::CLIMATE_PRESET_ECO:
+        fan_speed_cmd = FAN_5;
+        break;
+      case climate::CLIMATE_PRESET_BOOST:
+        fan_speed_cmd = FAN_4;
+        break;
+      default:
+        // FAN_4/FAN_5 are HiPower/Econo modes, not fan speeds.
+        // Shift down so normal fan control uses FAN_1-FAN_3.
+        if (fan_speed_cmd >= FAN_2)
+          fan_speed_cmd--;
+        break;
+    }
+  }
+
   switch (this->mode) {
     case climate::CLIMATE_MODE_COOL:
       power_mode_cmd = POWER_ON;
@@ -242,7 +268,3 @@ void HeatpumpIRClimate::transmit_state() {
   heatpump_ir_->send(esp_sender, power_mode_cmd, operating_mode_cmd, fan_speed_cmd, temperature_cmd, swing_v_cmd,
                      swing_h_cmd);
 }
-
-}  // namespace esphome::heatpumpir
-
-#endif

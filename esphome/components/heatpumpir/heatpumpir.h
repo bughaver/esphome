@@ -117,6 +117,7 @@ class HeatpumpIRClimate : public climate_ir::ClimateIR {
   HeatpumpIR *heatpump_ir_;
   /// Transmit via IR the state of this climate controller.
   void transmit_state() override;
+  climate::ClimateTraits traits() override;
   Protocol protocol_;
   HorizontalDirection default_horizontal_direction_;
   VerticalDirection default_vertical_direction_;
