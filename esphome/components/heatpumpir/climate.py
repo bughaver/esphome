@@ -11,7 +11,7 @@ from esphome.core import CORE
 
 CODEOWNERS = ["@rob-deutsch"]
 
-AUTO_LOAD = ["climate_ir"]
+AUTO_LOAD = ["climate_ir", "remote_receiver"]
 
 heatpumpir_ns = cg.esphome_ns.namespace("heatpumpir")
 HeatpumpIRClimate = heatpumpir_ns.class_("HeatpumpIRClimate", climate_ir.ClimateIR)
@@ -126,6 +126,6 @@ async def to_code(config):
     cg.add(var.set_max_temperature(config[CONF_MAX_TEMPERATURE]))
     cg.add(var.set_min_temperature(config[CONF_MIN_TEMPERATURE]))
 
-    cg.add_library("tonia/HeatpumpIR", "1.0.41")
+    cg.add_library("tonia/HeatpumpIR", "1.0.42")
     if CORE.is_libretiny or CORE.is_esp32:
         CORE.add_platformio_option("lib_ignore", ["IRremoteESP8266"])

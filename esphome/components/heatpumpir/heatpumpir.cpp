@@ -2,6 +2,7 @@
 
 #if defined(USE_ARDUINO) || defined(USE_ESP32)
 
+#include <cmath>
 #include <map>
 #include <IRSender.h>
 #include <HeatpumpIRFactory.h>
@@ -113,7 +114,7 @@ void HeatpumpIRClimate::setup() {
       this->current_temperature = state;
 
       IRSenderESPHome esp_sender(this->transmitter_);
-      this->heatpump_ir_->send(esp_sender, uint8_t(lround(this->current_temperature)));
+      this->heatpump_ir_->send(esp_sender, uint8_t(std::lround(this->current_temperature)));
 
       // current temperature changed, publish state
       this->publish_state();
@@ -122,6 +123,15 @@ void HeatpumpIRClimate::setup() {
   } else {
     this->current_temperature = NAN;
   }
+}
+
+climate::ClimateTraits HeatpumpIRClimate::traits() {
+  auto traits = climate_ir::ClimateIR::traits();
+  if (this->protocol_ == PROTOCOL_MITSUBISHI_HEAVY_ZJ || this->protocol_ == PROTOCOL_MITSUBISHI_HEAVY_ZMP) {
+    traits.set_supported_presets(
+        {climate::CLIMATE_PRESET_NONE, climate::CLIMATE_PRESET_ECO, climate::CLIMATE_PRESET_BOOST});
+  }
+  return traits;
 }
 
 void HeatpumpIRClimate::transmit_state() {
@@ -202,6 +212,23 @@ void HeatpumpIRClimate::transmit_state() {
       break;
   }
 
+  if (this->protocol_ == PROTOCOL_MITSUBISHI_HEAVY_ZJ || this->protocol_ == PROTOCOL_MITSUBISHI_HEAVY_ZMP) {
+    switch (this->preset.value_or(climate::CLIMATE_PRESET_NONE)) {
+      case climate::CLIMATE_PRESET_ECO:
+        fan_speed_cmd = FAN_5;
+        break;
+      case climate::CLIMATE_PRESET_BOOST:
+        fan_speed_cmd = FAN_4;
+        break;
+      default:
+        // FAN_4/FAN_5 are HiPower/Econo modes, not fan speeds.
+        // Shift down so normal fan control uses FAN_1-FAN_3.
+        if (fan_speed_cmd >= FAN_2)
+          fan_speed_cmd--;
+        break;
+    }
+  }
+
   switch (this->mode) {
     case climate::CLIMATE_MODE_COOL:
       power_mode_cmd = POWER_ON;
@@ -240,6 +267,105 @@ void HeatpumpIRClimate::transmit_state() {
   IRSenderESPHome esp_sender(this->transmitter_);
   heatpump_ir_->send(esp_sender, power_mode_cmd, operating_mode_cmd, fan_speed_cmd, temperature_cmd, swing_v_cmd,
                      swing_h_cmd);
+}
+
+// ZJ/ZMP frame prefix bytes (not defined by library)
+static const uint8_t MITSUBISHI_HEAVY_FRAME_PREFIX[5] = {0x52, 0xAE, 0xC3, 0x26, 0xD9};
+
+static const uint8_t MITSUBISHI_HEAVY_MODE_MASK = 0x07;
+static const uint8_t MITSUBISHI_HEAVY_TEMP_MASK = 0x0F;
+static const uint8_t MITSUBISHI_HEAVY_FAN_MASK = 0xE0;
+// Vertical swing is split: bit 1 in frame[5], bits 4+3 in frame[7]
+static const uint8_t MITSUBISHI_HEAVY_SWING_V_MASK5 = 0x02;
+static const uint8_t MITSUBISHI_HEAVY_SWING_V_MASK7 = 0x18;
+static const uint8_t MITSUBISHI_HEAVY_CHECKSUM_BYTE = 0xFF;
+
+bool HeatpumpIRClimate::on_receive(remote_base::RemoteReceiveData data) {
+  uint8_t frame[11] = {};
+
+  if (!data.expect_item(MITSUBISHI_HEAVY_HDR_MARK, MITSUBISHI_HEAVY_HDR_SPACE))
+    return false;
+
+  for (uint8_t pos = 0; pos < 11; pos++) {
+    uint8_t byte = 0;
+    for (int8_t bit = 0; bit < 8; bit++) {
+      if (data.expect_item(MITSUBISHI_HEAVY_BIT_MARK, MITSUBISHI_HEAVY_ONE_SPACE)) {
+        byte |= 1 << bit;
+      } else if (!data.expect_item(MITSUBISHI_HEAVY_BIT_MARK, MITSUBISHI_HEAVY_ZERO_SPACE)) {
+        return false;
+      }
+    }
+    frame[pos] = byte;
+
+    if (pos < 5 && byte != MITSUBISHI_HEAVY_FRAME_PREFIX[pos])
+      return false;
+  }
+
+  if ((uint8_t) (frame[5] ^ frame[6]) != MITSUBISHI_HEAVY_CHECKSUM_BYTE ||
+      (uint8_t) (frame[7] ^ frame[8]) != MITSUBISHI_HEAVY_CHECKSUM_BYTE ||
+      (uint8_t) (frame[9] ^ frame[10]) != MITSUBISHI_HEAVY_CHECKSUM_BYTE) {
+    return false;
+  }
+
+  // Shared: operating mode
+  if (frame[9] & MITSUBISHI_HEAVY_MODE_OFF) {
+    this->mode = climate::CLIMATE_MODE_OFF;
+  } else {
+    switch (frame[9] & MITSUBISHI_HEAVY_MODE_MASK) {
+      case MITSUBISHI_HEAVY_MODE_AUTO:
+        this->mode = climate::CLIMATE_MODE_HEAT_COOL;
+        break;
+      case MITSUBISHI_HEAVY_MODE_HEAT:
+        this->mode = climate::CLIMATE_MODE_HEAT;
+        break;
+      case MITSUBISHI_HEAVY_MODE_COOL:
+        this->mode = climate::CLIMATE_MODE_COOL;
+        break;
+      case MITSUBISHI_HEAVY_MODE_DRY:
+        this->mode = climate::CLIMATE_MODE_DRY;
+        break;
+      case MITSUBISHI_HEAVY_MODE_FAN:
+        this->mode = climate::CLIMATE_MODE_FAN_ONLY;
+        break;
+      default:
+        return false;
+    }
+  }
+
+  this->target_temperature = 17 + ((~(frame[9] >> 4)) & MITSUBISHI_HEAVY_TEMP_MASK);
+
+  // Protocol-specific: fan, presets, and swing
+  switch (this->protocol_) {
+    case PROTOCOL_MITSUBISHI_HEAVY_ZMP: {
+      uint8_t fan = frame[7] & MITSUBISHI_HEAVY_FAN_MASK;
+      if (fan == MITSUBISHI_HEAVY_ZMP_FAN_AUTO) {
+        this->fan_mode = climate::CLIMATE_FAN_AUTO;
+        this->preset = climate::CLIMATE_PRESET_NONE;
+      } else if (fan == MITSUBISHI_HEAVY_ZMP_FAN1) {
+        this->fan_mode = climate::CLIMATE_FAN_LOW;
+        this->preset = climate::CLIMATE_PRESET_NONE;
+      } else if (fan == MITSUBISHI_HEAVY_ZMP_FAN2) {
+        this->fan_mode = climate::CLIMATE_FAN_MEDIUM;
+        this->preset = climate::CLIMATE_PRESET_NONE;
+      } else if (fan == MITSUBISHI_HEAVY_ZMP_FAN3) {
+        this->fan_mode = climate::CLIMATE_FAN_HIGH;
+        this->preset = climate::CLIMATE_PRESET_NONE;
+      } else if (fan == MITSUBISHI_HEAVY_ZMP_HIPOWER) {
+        this->preset = climate::CLIMATE_PRESET_BOOST;
+      } else if (fan == MITSUBISHI_HEAVY_ZMP_ECONO) {
+        this->preset = climate::CLIMATE_PRESET_ECO;
+      }
+      uint8_t swing_v = (frame[5] & MITSUBISHI_HEAVY_SWING_V_MASK5) | (frame[7] & MITSUBISHI_HEAVY_SWING_V_MASK7);
+      this->swing_mode = (swing_v == MITSUBISHI_HEAVY_ZMP_VS_SWING) ? climate::CLIMATE_SWING_VERTICAL
+                                                                     : climate::CLIMATE_SWING_OFF;
+      break;
+    }
+    default:
+      return false;
+  }
+
+  this->publish_state();
+  return true;
 }
 
 }  // namespace esphome::heatpumpir
