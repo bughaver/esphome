@@ -2,7 +2,6 @@
 
 #if defined(USE_ARDUINO) || defined(USE_ESP32)
 
-#include <optional>
 #include "esphome/components/climate_ir/climate_ir.h"
 
 // Forward-declare HeatpumpIR class from library. We cannot include its header here because it has unnamespaced defines
@@ -116,7 +115,6 @@ class HeatpumpIRClimate : public climate_ir::ClimateIR {
 
  protected:
   HeatpumpIR *heatpump_ir_;
-  void control(const climate::ClimateCall &call) override;
   /// Transmit via IR the state of this climate controller.
   void transmit_state() override;
   bool on_receive(remote_base::RemoteReceiveData data) override;
@@ -130,7 +128,6 @@ class HeatpumpIRClimate : public climate_ir::ClimateIR {
 
   float max_temperature_;
   float min_temperature_;
-  optional<climate::ClimateFanMode> saved_fan_mode_{};
 };
 
 }  // namespace esphome::heatpumpir
