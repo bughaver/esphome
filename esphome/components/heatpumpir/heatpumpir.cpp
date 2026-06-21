@@ -139,18 +139,30 @@ bool HeatpumpIRClimate::is_mitsubishi_heavy_() const {
          this->protocol_ == PROTOCOL_MITSUBISHI_HEAVY_ZMP;
 }
 
-uint8_t HeatpumpIRClimate::mitsubishi_heavy_fan_speed_(uint8_t fan_speed_cmd) const {
+uint8_t HeatpumpIRClimate::mitsubishi_heavy_preset_to_fan_speed_() const {
   switch (this->preset.value_or(climate::CLIMATE_PRESET_NONE)) {
     case climate::CLIMATE_PRESET_ECO:
       return FAN_5;
     case climate::CLIMATE_PRESET_BOOST:
       return FAN_4;
     default:
-      break;
+      return FAN_AUTO;
   }
+}
+
+uint8_t HeatpumpIRClimate::mitsubishi_heavy_shift_fan_speed_(uint8_t fan_speed_cmd) const {
+  // FAN_4 and FAN_5 are reserved for HiPower/Econo presets.
+  // Normal speeds shift down so LOW/MEDIUM/HIGH map to FAN_1/FAN_2/FAN_3.
   if (fan_speed_cmd == FAN_2 || fan_speed_cmd == FAN_3 || fan_speed_cmd == FAN_4)
     return fan_speed_cmd - 1;
   return fan_speed_cmd;
+}
+
+uint8_t HeatpumpIRClimate::mitsubishi_heavy_fan_speed_(uint8_t fan_speed_cmd) const {
+  uint8_t preset_fan = this->mitsubishi_heavy_preset_to_fan_speed_();
+  if (preset_fan != FAN_AUTO)
+    return preset_fan;
+  return this->mitsubishi_heavy_shift_fan_speed_(fan_speed_cmd);
 }
 
 void HeatpumpIRClimate::transmit_state() {
