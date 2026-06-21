@@ -164,19 +164,23 @@ void HeatpumpIRClimate::control(const climate::ClimateCall &call) {
   if (preset.has_value()) {
     auto new_preset = *preset;
     if (new_preset == climate::CLIMATE_PRESET_ECO || new_preset == climate::CLIMATE_PRESET_BOOST) {
-      this->saved_fan_mode_ = this->fan_mode;
+      if (!this->saved_fan_mode_.has_value())
+        this->saved_fan_mode_ = this->fan_mode;
       this->fan_mode = climate::CLIMATE_FAN_AUTO;
       this->preset = new_preset;
     } else if (new_preset == climate::CLIMATE_PRESET_NONE) {
-      if (this->saved_fan_mode_.has_value()) {
+      if (fan_mode.has_value()) {
+        this->fan_mode = *fan_mode;
+      } else if (this->saved_fan_mode_.has_value()) {
         this->fan_mode = *this->saved_fan_mode_;
-        this->saved_fan_mode_.reset();
       }
+      this->saved_fan_mode_.reset();
       this->preset = new_preset;
     }
   } else if (fan_mode.has_value()) {
     this->fan_mode = *fan_mode;
     this->preset = climate::CLIMATE_PRESET_NONE;
+    this->saved_fan_mode_.reset();
   }
 
   auto mode = call.get_mode();
