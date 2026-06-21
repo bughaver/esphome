@@ -272,3 +272,7 @@ void HeatpumpIRClimate::transmit_state() {
   heatpump_ir_->send(esp_sender, power_mode_cmd, operating_mode_cmd, fan_speed_cmd, temperature_cmd, swing_v_cmd,
                      swing_h_cmd);
 }
+
+}  // namespace esphome::heatpumpir
+
+#endif
