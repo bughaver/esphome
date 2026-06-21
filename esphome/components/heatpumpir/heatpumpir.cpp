@@ -157,6 +157,42 @@ uint8_t HeatpumpIRClimate::mitsubishi_heavy_fan_speed_(uint8_t fan_speed_cmd) co
   return this->mitsubishi_heavy_shift_fan_speed_(fan_speed_cmd);
 }
 
+void HeatpumpIRClimate::control(const climate::ClimateCall &call) {
+  auto fan_mode = call.get_fan_mode();
+  auto preset = call.get_preset();
+
+  if (preset.has_value()) {
+    auto new_preset = *preset;
+    if (new_preset == climate::CLIMATE_PRESET_ECO || new_preset == climate::CLIMATE_PRESET_BOOST) {
+      this->saved_fan_mode_ = this->fan_mode;
+      this->fan_mode = climate::CLIMATE_FAN_AUTO;
+      this->preset = new_preset;
+    } else if (new_preset == climate::CLIMATE_PRESET_NONE) {
+      if (this->saved_fan_mode_.has_value()) {
+        this->fan_mode = *this->saved_fan_mode_;
+        this->saved_fan_mode_.reset();
+      }
+      this->preset = new_preset;
+    }
+  } else if (fan_mode.has_value()) {
+    this->fan_mode = *fan_mode;
+    this->preset = climate::CLIMATE_PRESET_NONE;
+  }
+
+  auto mode = call.get_mode();
+  if (mode.has_value())
+    this->mode = *mode;
+  auto target_temperature = call.get_target_temperature();
+  if (target_temperature.has_value())
+    this->target_temperature = *target_temperature;
+  auto swing_mode = call.get_swing_mode();
+  if (swing_mode.has_value())
+    this->swing_mode = *swing_mode;
+
+  this->transmit_state();
+  this->publish_state();
+}
+
 void HeatpumpIRClimate::transmit_state() {
   uint8_t power_mode_cmd;
   uint8_t operating_mode_cmd;
