@@ -139,7 +139,7 @@ bool HeatpumpIRClimate::is_mitsubishi_heavy_() const {
          this->protocol_ == PROTOCOL_MITSUBISHI_HEAVY_ZMP;
 }
 
-uint8_t HeatpumpIRClimate::fan_speed_for_zj_zmp_(uint8_t fan_speed_cmd) const {
+uint8_t HeatpumpIRClimate::mitsubishi_heavy_fan_speed_(uint8_t fan_speed_cmd) const {
   switch (this->preset.value_or(climate::CLIMATE_PRESET_NONE)) {
     case climate::CLIMATE_PRESET_ECO:
       return FAN_5;
@@ -232,7 +232,7 @@ void HeatpumpIRClimate::transmit_state() {
   }
 
   if (this->is_mitsubishi_heavy_()) {
-    fan_speed_cmd = this->fan_speed_for_zj_zmp_(fan_speed_cmd);
+    fan_speed_cmd = this->mitsubishi_heavy_fan_speed_(fan_speed_cmd);
   }
 
   switch (this->mode) {
