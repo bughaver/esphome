@@ -118,6 +118,8 @@ class HeatpumpIRClimate : public climate_ir::ClimateIR {
   /// Transmit via IR the state of this climate controller.
   void transmit_state() override;
   climate::ClimateTraits traits() override;
+  /// Returns true for Mitsubishi Heavy ZJ/ZMP protocols which repurpose FAN_4/FAN_5 as preset modes.
+  bool is_mitsubishi_heavy() const;
   Protocol protocol_;
   HorizontalDirection default_horizontal_direction_;
   VerticalDirection default_vertical_direction_;
