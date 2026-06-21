@@ -135,7 +135,22 @@ climate::ClimateTraits HeatpumpIRClimate::traits() {
 }
 
 bool HeatpumpIRClimate::is_mitsubishi_heavy_() const {
-  return this->protocol_ == PROTOCOL_MITSUBISHI_HEAVY_ZJ || this->protocol_ == PROTOCOL_MITSUBISHI_HEAVY_ZMP;
+  return this->protocol_ == PROTOCOL_MITSUBISHI_HEAVY_ZJ || this->protocol_ == PROTOCOL_MITSUBISHI_HEAVY_ZM ||
+         this->protocol_ == PROTOCOL_MITSUBISHI_HEAVY_ZMP;
+}
+
+uint8_t HeatpumpIRClimate::fan_speed_for_zj_zmp_(uint8_t fan_speed_cmd) const {
+  switch (this->preset.value_or(climate::CLIMATE_PRESET_NONE)) {
+    case climate::CLIMATE_PRESET_ECO:
+      return FAN_5;
+    case climate::CLIMATE_PRESET_BOOST:
+      return FAN_4;
+    default:
+      break;
+  }
+  if (fan_speed_cmd == FAN_2 || fan_speed_cmd == FAN_3 || fan_speed_cmd == FAN_4)
+    return fan_speed_cmd - 1;
+  return fan_speed_cmd;
 }
 
 void HeatpumpIRClimate::transmit_state() {
@@ -217,20 +232,7 @@ void HeatpumpIRClimate::transmit_state() {
   }
 
   if (this->is_mitsubishi_heavy_()) {
-    switch (this->preset.value_or(climate::CLIMATE_PRESET_NONE)) {
-      case climate::CLIMATE_PRESET_ECO:
-        fan_speed_cmd = FAN_5;
-        break;
-      case climate::CLIMATE_PRESET_BOOST:
-        fan_speed_cmd = FAN_4;
-        break;
-      default:
-        // FAN_4/FAN_5 are HiPower/Econo modes, not fan speeds.
-        // Shift down so normal fan control uses FAN_1-FAN_3.
-        if (fan_speed_cmd >= FAN_2)
-          fan_speed_cmd--;
-        break;
-    }
+    fan_speed_cmd = this->fan_speed_for_zj_zmp_(fan_speed_cmd);
   }
 
   switch (this->mode) {

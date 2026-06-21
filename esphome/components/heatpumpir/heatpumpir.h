@@ -119,6 +119,8 @@ class HeatpumpIRClimate : public climate_ir::ClimateIR {
   void transmit_state() override;
   climate::ClimateTraits traits() override;
   bool is_mitsubishi_heavy_() const;
+  /// Maps fan speed for Mitsubishi Heavy ZJ/ZM/ZMP: FAN_4/FAN_5 are HiPower/Econo (presets), so normal speeds shift to FAN_1-FAN_3.
+  uint8_t fan_speed_for_zj_zmp_(uint8_t fan_speed_cmd) const;
   Protocol protocol_;
   HorizontalDirection default_horizontal_direction_;
   VerticalDirection default_vertical_direction_;
