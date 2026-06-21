@@ -7,7 +7,8 @@
 
 namespace esphome::heatpumpir {
 
-bool decode_mitsubishi_heavy_frame(HeatpumpIRClimate &climate, remote_base::RemoteReceiveData &data, uint8_t frame[11]) {
+bool decode_mitsubishi_heavy_frame(HeatpumpIRClimate &climate, remote_base::RemoteReceiveData &data,
+                                   uint8_t frame[11]) {
   static const uint8_t FRAME_PREFIX[5] = {0x52, 0xAE, 0xC3, 0x26, 0xD9};
   static const uint8_t MODE_MASK = 0x07;
   static const uint8_t TEMP_MASK = 0x0F;
