@@ -1,6 +1,6 @@
 #include "heatpumpir.h"
 
-#include "receiver_mitsubishi_heavy_zmp.h"
+#include "receiver_mitsubishi_heavy.h"
 
 #if defined(USE_ARDUINO) || defined(USE_ESP32)
 
@@ -246,10 +246,13 @@ void HeatpumpIRClimate::transmit_state() {
 }
 
 bool HeatpumpIRClimate::on_receive(remote_base::RemoteReceiveData data) {
+  uint8_t frame[11];
   bool decoded = false;
   switch (this->protocol_) {
     case PROTOCOL_MITSUBISHI_HEAVY_ZMP:
-      decoded = decode_mitsubishi_heavy_zmp(*this, data);
+      decoded = decode_mitsubishi_heavy_frame(*this, data, frame);
+      if (decoded)
+        decoded = decode_mitsubishi_heavy_zmp(frame, *this);
       break;
     default:
       return false;
