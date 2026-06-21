@@ -127,14 +127,14 @@ void HeatpumpIRClimate::setup() {
 
 climate::ClimateTraits HeatpumpIRClimate::traits() {
   auto traits = climate_ir::ClimateIR::traits();
-  if (this->is_mitsubishi_heavy()) {
+  if (this->is_mitsubishi_heavy_()) {
     traits.set_supported_presets(
         {climate::CLIMATE_PRESET_NONE, climate::CLIMATE_PRESET_ECO, climate::CLIMATE_PRESET_BOOST});
   }
   return traits;
 }
 
-bool HeatpumpIRClimate::is_mitsubishi_heavy() const {
+bool HeatpumpIRClimate::is_mitsubishi_heavy_() const {
   return this->protocol_ == PROTOCOL_MITSUBISHI_HEAVY_ZJ || this->protocol_ == PROTOCOL_MITSUBISHI_HEAVY_ZMP;
 }
 
@@ -216,7 +216,7 @@ void HeatpumpIRClimate::transmit_state() {
       break;
   }
 
-  if (this->is_mitsubishi_heavy()) {
+  if (this->is_mitsubishi_heavy_()) {
     switch (this->preset.value_or(climate::CLIMATE_PRESET_NONE)) {
       case climate::CLIMATE_PRESET_ECO:
         fan_speed_cmd = FAN_5;
