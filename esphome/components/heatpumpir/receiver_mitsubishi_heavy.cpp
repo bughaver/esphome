@@ -7,12 +7,11 @@
 
 namespace esphome::heatpumpir {
 
-bool decode_mitsubishi_heavy_frame(HeatpumpIRClimate &climate, remote_base::RemoteReceiveData &data,
-                                   uint8_t frame[11]) {
-  static const uint8_t frame_prefix[5] = {0x52, 0xAE, 0xC3, 0x26, 0xD9};
-  static const uint8_t mode_mask = 0x07;
-  static const uint8_t temp_mask = 0x0F;
-  static const uint8_t checksum_byte = 0xFF;
+bool decode_mitsubishi_heavy_frame(HeatpumpIRClimate &climate, remote_base::RemoteReceiveData &data, uint8_t frame[11]) {
+  static const uint8_t FRAME_PREFIX[5] = {0x52, 0xAE, 0xC3, 0x26, 0xD9};
+  static const uint8_t MODE_MASK = 0x07;
+  static const uint8_t TEMP_MASK = 0x0F;
+  static const uint8_t CHECKSUM_BYTE = 0xFF;
 
   if (!data.expect_item(MITSUBISHI_HEAVY_HDR_MARK, MITSUBISHI_HEAVY_HDR_SPACE))
     return false;
@@ -28,19 +27,19 @@ bool decode_mitsubishi_heavy_frame(HeatpumpIRClimate &climate, remote_base::Remo
     }
     frame[pos] = byte;
 
-    if (pos < 5 && byte != frame_prefix[pos])
+    if (pos < 5 && byte != FRAME_PREFIX[pos])
       return false;
   }
 
-  if ((uint8_t) (frame[5] ^ frame[6]) != checksum_byte || (uint8_t) (frame[7] ^ frame[8]) != checksum_byte ||
-      (uint8_t) (frame[9] ^ frame[10]) != checksum_byte) {
+  if ((uint8_t) (frame[5] ^ frame[6]) != CHECKSUM_BYTE || (uint8_t) (frame[7] ^ frame[8]) != CHECKSUM_BYTE ||
+      (uint8_t) (frame[9] ^ frame[10]) != CHECKSUM_BYTE) {
     return false;
   }
 
   if (frame[9] & MITSUBISHI_HEAVY_MODE_OFF) {
     climate.mode = climate::CLIMATE_MODE_OFF;
   } else {
-    switch (frame[9] & mode_mask) {
+    switch (frame[9] & MODE_MASK) {
       case MITSUBISHI_HEAVY_MODE_AUTO:
         climate.mode = climate::CLIMATE_MODE_HEAT_COOL;
         break;
@@ -61,7 +60,7 @@ bool decode_mitsubishi_heavy_frame(HeatpumpIRClimate &climate, remote_base::Remo
     }
   }
 
-  climate.target_temperature = 17 + ((~(frame[9] >> 4)) & temp_mask);
+  climate.target_temperature = 17 + ((~(frame[9] >> 4)) & TEMP_MASK);
   return true;
 }
 
