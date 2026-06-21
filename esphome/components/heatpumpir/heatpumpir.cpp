@@ -135,8 +135,7 @@ climate::ClimateTraits HeatpumpIRClimate::traits() {
 }
 
 bool HeatpumpIRClimate::is_mitsubishi_heavy_() const {
-  return this->protocol_ == PROTOCOL_MITSUBISHI_HEAVY_ZJ || this->protocol_ == PROTOCOL_MITSUBISHI_HEAVY_ZM ||
-         this->protocol_ == PROTOCOL_MITSUBISHI_HEAVY_ZMP;
+  return this->protocol_ == PROTOCOL_MITSUBISHI_HEAVY_ZJ || this->protocol_ == PROTOCOL_MITSUBISHI_HEAVY_ZMP;
 }
 
 uint8_t HeatpumpIRClimate::mitsubishi_heavy_preset_to_fan_speed_() const {
