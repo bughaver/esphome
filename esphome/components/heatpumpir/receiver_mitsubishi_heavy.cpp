@@ -32,8 +32,7 @@ bool decode_mitsubishi_heavy_frame(HeatpumpIRClimate &climate, remote_base::Remo
       return false;
   }
 
-  if ((uint8_t) (frame[5] ^ frame[6]) != checksum_byte ||
-      (uint8_t) (frame[7] ^ frame[8]) != checksum_byte ||
+  if ((uint8_t) (frame[5] ^ frame[6]) != checksum_byte || (uint8_t) (frame[7] ^ frame[8]) != checksum_byte ||
       (uint8_t) (frame[9] ^ frame[10]) != checksum_byte) {
     return false;
   }
