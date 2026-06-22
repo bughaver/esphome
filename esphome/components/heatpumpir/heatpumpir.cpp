@@ -103,6 +103,14 @@ const std::map<Protocol, std::function<HeatpumpIR *()>> PROTOCOL_CONSTRUCTOR_MAP
     {PROTOCOL_R51M, []() { return new R51MHeatpumpIR(); }},                                  // NOLINT
 };
 
+const std::map<Protocol, std::function<bool(HeatpumpIRClimate &, remote_base::RemoteReceiveData &)>> PROTOCOL_RECEIVE_MAP =
+    {
+        {PROTOCOL_MITSUBISHI_HEAVY_ZMP, [](HeatpumpIRClimate &climate, remote_base::RemoteReceiveData &data) {
+           uint8_t frame[11];
+           return decode_mitsubishi_heavy_frame(data, frame, climate) && decode_mitsubishi_heavy_zmp(frame, climate);
+         }},
+};
+
 void HeatpumpIRClimate::setup() {
   auto protocol_constructor = PROTOCOL_CONSTRUCTOR_MAP.find(protocol_);
   if (protocol_constructor == PROTOCOL_CONSTRUCTOR_MAP.end()) {
@@ -280,19 +288,14 @@ void HeatpumpIRClimate::transmit_state() {
 }
 
 bool HeatpumpIRClimate::on_receive(remote_base::RemoteReceiveData data) {
-  uint8_t frame[11];
-  bool decoded = false;
-  switch (this->protocol_) {
-    case PROTOCOL_MITSUBISHI_HEAVY_ZMP:
-      decoded = decode_mitsubishi_heavy_frame(*this, data, frame);
-      if (decoded)
-        decoded = decode_mitsubishi_heavy_zmp(frame, *this);
-      break;
-    default:
-      return false;
-  }
-  if (decoded)
+  auto it = PROTOCOL_RECEIVE_MAP.find(this->protocol_);
+  if (it == PROTOCOL_RECEIVE_MAP.end())
+    return false;
+  bool decoded = it->second(*this, data);
+  if (decoded) {
+    this->target_temperature = clamp(this->target_temperature, this->min_temperature_, this->max_temperature_);
     this->publish_state();
+  }
   return decoded;
 }
 
