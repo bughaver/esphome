@@ -119,7 +119,6 @@ class HeatpumpIRClimate : public climate_ir::ClimateIR {
   void transmit_state() override;
   /// Handle received IR data from the remote control.
   bool on_receive(remote_base::RemoteReceiveData data) override;
-  climate::ClimateTraits traits() override;
   bool is_mitsubishi_heavy_() const;
   uint8_t mitsubishi_heavy_fan_speed_(uint8_t fan_speed_cmd) const;
   uint8_t mitsubishi_heavy_shift_fan_speed_(uint8_t fan_speed_cmd) const;
