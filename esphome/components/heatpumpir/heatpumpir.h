@@ -124,6 +124,7 @@ class HeatpumpIRClimate final : public climate_ir::ClimateIR {
  protected:
   HeatpumpIR *heatpump_ir_;
   /// Transmit via IR the state of this climate controller.
+  void control(const climate::ClimateCall &call) override;
   void transmit_state() override;
   /// Handle received IR data from the remote control.
   bool on_receive(remote_base::RemoteReceiveData data) override;
