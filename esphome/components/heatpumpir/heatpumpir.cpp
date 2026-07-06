@@ -1,5 +1,7 @@
 #include "heatpumpir.h"
 
+#include "receiver_mitsubishi_heavy.h"
+
 #if defined(USE_ARDUINO) || defined(USE_ESP32)
 
 #include <cmath>
@@ -101,6 +103,15 @@ const std::map<Protocol, std::function<HeatpumpIR *()>> PROTOCOL_CONSTRUCTOR_MAP
     {PROTOCOL_R51M, []() { return new R51MHeatpumpIR(); }},                                  // NOLINT
 };
 
+const std::map<Protocol, std::function<bool(HeatpumpIRClimate &, remote_base::RemoteReceiveData &)>>
+    PROTOCOL_RECEIVE_MAP = {
+        {PROTOCOL_MITSUBISHI_HEAVY_ZMP,
+         [](HeatpumpIRClimate &climate, remote_base::RemoteReceiveData &data) {
+           uint8_t frame[11];
+           return decode_mitsubishi_heavy_frame(data, frame, climate) && decode_mitsubishi_heavy_zmp(frame, climate);
+         }},
+};
+
 void HeatpumpIRClimate::setup() {
   auto protocol_constructor = PROTOCOL_CONSTRUCTOR_MAP.find(protocol_);
   if (protocol_constructor == PROTOCOL_CONSTRUCTOR_MAP.end()) {
@@ -108,6 +119,9 @@ void HeatpumpIRClimate::setup() {
     return;
   }
   this->heatpump_ir_ = protocol_constructor->second();
+  if (this->is_mitsubishi_heavy_()) {
+    this->presets_ = {climate::CLIMATE_PRESET_NONE, climate::CLIMATE_PRESET_ECO, climate::CLIMATE_PRESET_BOOST};
+  }
   climate_ir::ClimateIR::setup();
   if (this->sensor_) {
     this->sensor_->add_on_state_callback([this](float state) {
@@ -123,6 +137,33 @@ void HeatpumpIRClimate::setup() {
   } else {
     this->current_temperature = NAN;
   }
+}
+
+bool HeatpumpIRClimate::is_mitsubishi_heavy_() const {
+  return this->protocol_ == PROTOCOL_MITSUBISHI_HEAVY_ZJ || this->protocol_ == PROTOCOL_MITSUBISHI_HEAVY_ZMP;
+}
+
+uint8_t HeatpumpIRClimate::mitsubishi_heavy_shift_fan_speed_(uint8_t fan_speed_cmd) const {
+  // FAN_4 and FAN_5 are reserved for HiPower/Econo presets.
+  // Normal speeds shift down so LOW/MEDIUM/HIGH map to FAN_1/FAN_2/FAN_3.
+  if (fan_speed_cmd == FAN_2 || fan_speed_cmd == FAN_3 || fan_speed_cmd == FAN_4)
+    return fan_speed_cmd - 1;
+  return fan_speed_cmd;
+}
+
+uint8_t HeatpumpIRClimate::mitsubishi_heavy_fan_speed_(uint8_t fan_speed_cmd) const {
+  auto preset = this->preset.value_or(climate::CLIMATE_PRESET_NONE);
+  if (preset == climate::CLIMATE_PRESET_ECO)
+    return FAN_5;
+  if (preset == climate::CLIMATE_PRESET_BOOST)
+    return FAN_4;
+  return this->mitsubishi_heavy_shift_fan_speed_(fan_speed_cmd);
+}
+
+void HeatpumpIRClimate::control(const climate::ClimateCall &call) {
+  if (this->is_mitsubishi_heavy_() && call.get_fan_mode().has_value() && !call.get_preset().has_value())
+    this->preset = climate::CLIMATE_PRESET_NONE;
+  climate_ir::ClimateIR::control(call);
 }
 
 void HeatpumpIRClimate::transmit_state() {
@@ -203,6 +244,10 @@ void HeatpumpIRClimate::transmit_state() {
       break;
   }
 
+  if (this->is_mitsubishi_heavy_()) {
+    fan_speed_cmd = this->mitsubishi_heavy_fan_speed_(fan_speed_cmd);
+  }
+
   switch (this->mode) {
     case climate::CLIMATE_MODE_COOL:
       power_mode_cmd = POWER_ON;
@@ -241,6 +286,18 @@ void HeatpumpIRClimate::transmit_state() {
   IRSenderESPHome esp_sender(this->transmitter_);
   heatpump_ir_->send(esp_sender, power_mode_cmd, operating_mode_cmd, fan_speed_cmd, temperature_cmd, swing_v_cmd,
                      swing_h_cmd);
+}
+
+bool HeatpumpIRClimate::on_receive(remote_base::RemoteReceiveData data) {
+  auto it = PROTOCOL_RECEIVE_MAP.find(this->protocol_);
+  if (it == PROTOCOL_RECEIVE_MAP.end())
+    return false;
+  bool decoded = it->second(*this, data);
+  if (decoded) {
+    this->target_temperature = clamp(this->target_temperature, this->min_temperature_, this->max_temperature_);
+    this->publish_state();
+  }
+  return decoded;
 }
 
 }  // namespace esphome::heatpumpir

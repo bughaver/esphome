@@ -93,16 +93,24 @@ enum VerticalDirection {
 const float TEMP_MIN = 0;    // Celsius
 const float TEMP_MAX = 100;  // Celsius
 
-class HeatpumpIRClimate : public climate_ir::ClimateIR {
+class HeatpumpIRClimate final : public climate_ir::ClimateIR {
  public:
   HeatpumpIRClimate()
-      : climate_ir::ClimateIR(TEMP_MIN, TEMP_MAX, 1.0f, true, true,
-                              {climate::CLIMATE_FAN_LOW, climate::CLIMATE_FAN_MEDIUM, climate::CLIMATE_FAN_HIGH,
-                               climate::CLIMATE_FAN_AUTO},
-                              {climate::CLIMATE_SWING_OFF, climate::CLIMATE_SWING_HORIZONTAL,
-                               climate::CLIMATE_SWING_VERTICAL, climate::CLIMATE_SWING_BOTH}) {}
+      : climate_ir::ClimateIR(
+            TEMP_MIN, TEMP_MAX, 1.0f, true, true,
+            {climate::CLIMATE_FAN_LOW, climate::CLIMATE_FAN_MEDIUM, climate::CLIMATE_FAN_HIGH,
+             climate::CLIMATE_FAN_AUTO},
+          {climate::CLIMATE_SWING_OFF, climate::CLIMATE_SWING_HORIZONTAL, climate::CLIMATE_SWING_VERTICAL,
+           climate::CLIMATE_SWING_BOTH}) {}
   void setup() override;
-  void set_protocol(Protocol protocol) { this->protocol_ = protocol; }
+  void set_protocol(Protocol protocol) {
+    this->protocol_ = protocol;
+    if (protocol == PROTOCOL_MITSUBISHI_HEAVY_ZMP) {
+      this->presets_.insert(climate::CLIMATE_PRESET_NONE);
+      this->presets_.insert(climate::CLIMATE_PRESET_ECO);
+      this->presets_.insert(climate::CLIMATE_PRESET_BOOST);
+    }
+  }
   void set_horizontal_default(HorizontalDirection horizontal_direction) {
     this->default_horizontal_direction_ = horizontal_direction;
   }
@@ -116,7 +124,13 @@ class HeatpumpIRClimate : public climate_ir::ClimateIR {
  protected:
   HeatpumpIR *heatpump_ir_;
   /// Transmit via IR the state of this climate controller.
+  void control(const climate::ClimateCall &call) override;
   void transmit_state() override;
+  /// Handle received IR data from the remote control.
+  bool on_receive(remote_base::RemoteReceiveData data) override;
+  bool is_mitsubishi_heavy_() const;
+  uint8_t mitsubishi_heavy_fan_speed_(uint8_t fan_speed_cmd) const;
+  uint8_t mitsubishi_heavy_shift_fan_speed_(uint8_t fan_speed_cmd) const;
   Protocol protocol_;
   HorizontalDirection default_horizontal_direction_;
   VerticalDirection default_vertical_direction_;
